@@ -126,7 +126,7 @@ final class CraftingDataCache{
 							Binary::writeInt($index),
 							$inputs,
 							array_map($converter->coreItemStackToNet(...), $r->getResults()),
-	furnace						$nullUUID,
+							$nullUUID,
 							CraftingRecipeBlockName::CRAFTING_TABLE,
 							50,
 							true,
