@@ -23,9 +23,41 @@ declare(strict_types=1);
 
 namespace pocketmine\block;
 
+use pocketmine\item\Fertilizer;
+use pocketmine\item\Item;
+use pocketmine\math\Facing;
+use pocketmine\math\Vector3;
+use pocketmine\player\Player;
+
 class Netherrack extends Opaque{
 
 	public function burnsForever() : bool{
 		return true;
+	}
+
+	public function onInteract(Item $item, int $face, Vector3 $clickVector, ?Player $player = null, array &$returnedItems = []) : bool{
+		if($this->getSide(Facing::UP)->getTypeId() !== BlockTypeIds::AIR){
+			return false;
+		}
+
+		if($item instanceof Fertilizer && $this->transformToNylium()){
+			$item->pop();
+
+			return true;
+		}
+
+		return false;
+	}
+
+	private function transformToNylium() : bool{
+		foreach($this->getHorizontalSides() as $side){
+			if($side instanceof Nylium){
+				$this->position->getWorld()->setBlock($this->position, $side);
+
+				return true;
+			}
+		}
+
+		return false;
 	}
 }

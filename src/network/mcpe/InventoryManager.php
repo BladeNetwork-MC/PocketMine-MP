@@ -444,8 +444,8 @@ class InventoryManager{
 		}
 
 		$typeConverter = $this->session->getTypeConverter();
-		$leftExtraData = $typeConverter->deserializeItemStackExtraData($left->getRawExtraData(), $left->getId());
-		$rightExtraData = $typeConverter->deserializeItemStackExtraData($right->getRawExtraData(), $right->getId());
+		$leftExtraData = $typeConverter->deserializeItemStackExtraData($this->session->getProtocolId(), $left->getRawExtraData(), $left->getId());
+		$rightExtraData = $typeConverter->deserializeItemStackExtraData($this->session->getProtocolId(), $right->getRawExtraData(), $right->getId());
 
 		$leftNbt = $leftExtraData->getNbt();
 		$rightNbt = $rightExtraData->getNbt();
@@ -683,7 +683,7 @@ class InventoryManager{
 	}
 
 	public function syncCreative() : void{
-		$this->session->sendDataPacket(CreativeInventoryCache::getInstance()->getCache($this->player->getCreativeInventory()));
+		$this->session->sendDataPacket(CreativeInventoryCache::getInstance($this->session->getProtocolId())->getCache($this->player->getCreativeInventory()));
 	}
 
 	/**

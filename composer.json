@@ -1,5 +1,5 @@
 {
-   "name": "pocketmine/pocketmine-mp",
+   "name": "nethergamesmc/pocketmine-mp",
    "description": "A server software for Minecraft: Bedrock Edition written in PHP",
    "type": "project",
    "homepage": "https://pmmp.io",
@@ -34,9 +34,9 @@
       "adhocore/json-comment": "~1.2.0",
       "pocketmine/netresearch-jsonmapper": "~v4.4.999",
       "pocketmine/bedrock-block-upgrade-schema": "~4.2.0+bedrock-1.21.0",
-      "pocketmine/bedrock-data": "~2.11.0+bedrock-1.21.0",
+      "nethergamesmc/bedrock-data": "dev-master",
       "pocketmine/bedrock-item-upgrade-schema": "~1.10.0+bedrock-1.21.0",
-      "pocketmine/bedrock-protocol": "~32.1.0+bedrock-1.21.2",
+      "nethergamesmc/bedrock-protocol": "dev-master",
       "pocketmine/binaryutils": "^0.2.1",
       "pocketmine/callback-validator": "^1.0.2",
       "pocketmine/color": "^0.3.0",
@@ -86,11 +86,21 @@
       "update-codegen": [
          "@php build/generate-bedrockdata-path-consts.php",
          "@php build/generate-biome-ids.php",
-         "@php build/generate-block-serializer-consts.php vendor/pocketmine/bedrock-data/canonical_block_states.nbt",
-         "@php build/generate-item-type-names.php vendor/pocketmine/bedrock-data/required_item_list.json",
+         "@php build/generate-block-serializer-consts.php vendor/nethergamesmc/bedrock-data/canonical_block_states.nbt",
+         "@php build/generate-item-type-names.php vendor/nethergamesmc/bedrock-data/required_item_list.json",
          "@php build/generate-known-translation-apis.php",
          "@php build/generate-pocketmine-yml-property-consts.php",
          "@php build/generate-registry-annotations.php src"
       ]
-   }
+   },
+   "repositories": [
+      {
+         "type": "vcs",
+         "url":  "git@github.com:NetherGamesMC/BedrockProtocol.git"
+      },
+      {
+         "type": "vcs",
+         "url":  "git@github.com:NetherGamesMC/BedrockData.git"
+      }
+   ]
 }

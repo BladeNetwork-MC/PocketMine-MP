@@ -507,7 +507,7 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer{
 	public function setAutoJump(bool $value) : void{
 		if($this->autoJump !== $value){
 			$this->autoJump = $value;
-			$this->getNetworkSession()->syncAdventureSettings();
+			$this->getNetworkSession()->syncAbilities($this);
 		}
 	}
 
@@ -1875,7 +1875,9 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer{
 
 		$soundPos = $entity->getPosition()->add(0, $entity->size->getHeight() / 2, 0);
 		if($ev->isCancelled()){
-			$this->getWorld()->addSound($soundPos, new EntityAttackNoDamageSound());
+			if(!$this->isSilent() && !$this->isAdventure()){
+				$this->getWorld()->addSound($soundPos, new EntityAttackNoDamageSound());
+			}
 			return false;
 		}
 		$this->getWorld()->addSound($soundPos, new EntityAttackSound());
@@ -1985,6 +1987,10 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer{
 		}
 		$this->setFlying($fly);
 		return true;
+	}
+
+	public function toggleCrawl(bool $crawl) : bool{
+		return false;
 	}
 
 	public function toggleGlide(bool $glide) : bool{
@@ -2485,6 +2491,38 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer{
 
 		$properties->setPlayerFlag(PlayerMetadataFlags::SLEEP, $this->sleeping !== null);
 		$properties->setBlockPos(EntityMetadataProperties::PLAYER_BED_POSITION, $this->sleeping !== null ? BlockPosition::fromVector3($this->sleeping) : new BlockPosition(0, 0, 0));
+	}
+
+	/**
+	 * @internal Used to sync player actions with the server.
+	 */
+	public function syncPlayerActions(?bool $sneaking, ?bool $sprinting, ?bool $swimming, ?bool $gliding) : bool{
+		$networkPropertiesDirty = $this->networkPropertiesDirty;
+		$isDesynchronized = $this->moveSpeedAttr->isDesynchronized();
+
+		$mismatch =
+			($sneaking !== null && !$this->toggleSneak($sneaking)) |
+			($sprinting !== null && !$this->toggleSprint($sprinting)) |
+			($swimming !== null && !$this->toggleSwim($swimming)) |
+			($gliding !== null && !$this->toggleGlide($gliding));
+
+		if((bool) $mismatch){
+			return false;
+		}
+
+		// We do not want to do anything with gliding and swimming,
+		// because it is syncing the player own bounding boxes.
+		if($sprinting !== null){
+			// In case the previous network properties was dirty.
+			$this->networkPropertiesDirty = $networkPropertiesDirty;
+
+			if(!$isDesynchronized){
+				// Mark as synchronized, we accept them as-is
+				$this->moveSpeedAttr->markSynchronized();
+			}
+		}
+
+		return true;
 	}
 
 	public function sendData(?array $targets, ?array $data = null) : void{

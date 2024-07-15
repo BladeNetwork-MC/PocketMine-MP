@@ -23,6 +23,9 @@ declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\handler;
 
+use pocketmine\item\ArmorTrimMaterial;
+use pocketmine\item\ArmorTrimPattern;
+use pocketmine\item\ArmorTrimRegistry;
 use pocketmine\nbt\tag\CompoundTag;
 use pocketmine\network\mcpe\cache\CraftingDataCache;
 use pocketmine\network\mcpe\cache\StaticPacketCache;
@@ -31,6 +34,7 @@ use pocketmine\network\mcpe\NetworkSession;
 use pocketmine\network\mcpe\protocol\PlayerAuthInputPacket;
 use pocketmine\network\mcpe\protocol\RequestChunkRadiusPacket;
 use pocketmine\network\mcpe\protocol\StartGamePacket;
+use pocketmine\network\mcpe\protocol\TrimDataPacket;
 use pocketmine\network\mcpe\protocol\types\BlockPosition;
 use pocketmine\network\mcpe\protocol\types\BoolGameRule;
 use pocketmine\network\mcpe\protocol\types\CacheableNbt;
@@ -41,27 +45,31 @@ use pocketmine\network\mcpe\protocol\types\NetworkPermissions;
 use pocketmine\network\mcpe\protocol\types\PlayerMovementSettings;
 use pocketmine\network\mcpe\protocol\types\PlayerMovementType;
 use pocketmine\network\mcpe\protocol\types\SpawnSettings;
+use pocketmine\network\mcpe\protocol\types\TrimMaterial;
+use pocketmine\network\mcpe\protocol\types\TrimPattern;
 use pocketmine\player\Player;
 use pocketmine\Server;
 use pocketmine\timings\Timings;
-use pocketmine\VersionInfo;
 use Ramsey\Uuid\Uuid;
-use function sprintf;
+use function array_map;
 
 /**
  * Handler used for the pre-spawn phase of the session.
  */
-class PreSpawnPacketHandler extends PacketHandler{
+class PreSpawnPacketHandler extends ChunkRequestPacketHandler{
 	public function __construct(
 		private Server $server,
 		private Player $player,
-		private NetworkSession $session,
+		NetworkSession $session,
 		private InventoryManager $inventoryManager
-	){}
+	){
+		parent::__construct($session);
+	}
 
 	public function setUp() : void{
 		Timings::$playerNetworkSendPreSpawnGameData->startTiming();
 		try{
+			$protocolId = $this->session->getProtocolId();
 			$location = $this->player->getLocation();
 			$world = $location->getWorld();
 
@@ -103,7 +111,7 @@ class PreSpawnPacketHandler extends PacketHandler{
 				0,
 				"",
 				true,
-				sprintf("%s %s", VersionInfo::NAME, VersionInfo::VERSION()->getFullVersion(true)),
+				"NetherGames v5.0",
 				Uuid::fromString(Uuid::NIL),
 				false,
 				false,
@@ -144,8 +152,13 @@ class PreSpawnPacketHandler extends PacketHandler{
 			$this->session->getLogger()->debug("Sending creative inventory data");
 			$this->inventoryManager->syncCreative();
 
+			$this->session->getLogger()->debug("Sending armor trim data");
+			$patterns = array_map(fn(ArmorTrimPattern $pattern) => new TrimPattern($pattern->getItemName(), $pattern->getIdentifier()), ArmorTrimRegistry::getInstance()->getPatterns());
+			$materials = array_map(fn(ArmorTrimMaterial $material) => new TrimMaterial($material->getIdentifier(), $material->getColor(), $material->getItemName()), ArmorTrimRegistry::getInstance()->getMaterials());
+			$this->session->sendDataPacket(TrimDataPacket::create($patterns, $materials));
+
 			$this->session->getLogger()->debug("Sending crafting data");
-			$this->session->sendDataPacket(CraftingDataCache::getInstance()->getCache($this->server->getCraftingManager()));
+			$this->session->sendDataPacket(CraftingDataCache::getInstance($protocolId)->getCache($this->server->getCraftingManager()));
 
 			$this->session->getLogger()->debug("Sending player list");
 			$this->session->syncPlayerList($this->server->getOnlinePlayers());
