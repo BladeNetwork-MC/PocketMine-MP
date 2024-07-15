@@ -149,24 +149,6 @@ abstract class Living extends Entity{
 			$this->getViewers(),
 			fn(EntityEventBroadcaster $broadcaster, array $recipients) => $broadcaster->onMobArmorChange($recipients, $this)
 		)));
-		$playArmorSound = function(Item $newItem, Item $oldItem) : void{
-			if(!$newItem->isNull() && $newItem instanceof Armor && !$newItem->equalsExact($oldItem)){
-				$equipSound = $newItem->getMaterial()->getEquipSound();
-				if($equipSound !== null){
-					$this->broadcastSound($equipSound);
-				}
-			}
-		};
-		$this->armorInventory->getListeners()->add(new CallbackInventoryListener(
-			function(Inventory $inventory, int $slot, Item $oldItem) use ($playArmorSound) : void{
-				$playArmorSound($inventory->getItem($slot), $oldItem);
-			},
-			function(Inventory $inventory, array $oldContents) use ($playArmorSound) : void{
-				foreach($oldContents as $slot => $oldItem){
-					$playArmorSound($inventory->getItem($slot), $oldItem);
-				}
-			}
-		));
 
 		$health = $this->getMaxHealth();
 
@@ -297,6 +279,15 @@ abstract class Living extends Entity{
 		}else{
 			$this->setSize($size->scale($this->getScale()));
 		}
+	}
+
+	public function getDefaultSpeed() : float{
+		return $this->moveSpeedAttr->getDefaultValue();
+	}
+
+	public function setDefaultSpeed(float $speed, bool $fit = false) : void{
+		$this->moveSpeedAttr->setDefaultValue($speed);
+		$this->setMovementSpeed($this->isSprinting() ? ($speed * 1.3) : $speed, $fit);
 	}
 
 	public function getMovementSpeed() : float{
@@ -573,26 +564,33 @@ abstract class Living extends Entity{
 			return;
 		}
 
-		$this->attackTime = $source->getAttackCooldown();
+		if($this->attackTime <= 0){
+			//this logic only applies if the entity was cold attacked
 
-		if($source instanceof EntityDamageByChildEntityEvent){
-			$e = $source->getChild();
-			if($e !== null){
-				$motion = $e->getMotion();
-				$this->knockBack($motion->x, $motion->z, $source->getKnockBack(), $source->getVerticalKnockBackLimit());
+			$this->attackTime = $source->getAttackCooldown();
+
+			if($source instanceof EntityDamageByChildEntityEvent){
+				$e = $source->getChild();
+				if($e !== null){
+					$motion = $e->getMotion();
+					$this->knockBack($motion->x, $motion->z, $source->getKnockBack(), $source->getVerticalKnockBackLimit());
+				}
+			}elseif($source instanceof EntityDamageByEntityEvent){
+				$e = $source->getDamager();
+				if($e !== null){
+					$deltaX = $this->location->x - $e->location->x;
+					$deltaZ = $this->location->z - $e->location->z;
+					$this->knockBack($deltaX, $deltaZ, $source->getKnockBack(), $source->getVerticalKnockBackLimit());
+				}
 			}
-		}elseif($source instanceof EntityDamageByEntityEvent){
-			$e = $source->getDamager();
-			if($e !== null){
-				$deltaX = $this->location->x - $e->location->x;
-				$deltaZ = $this->location->z - $e->location->z;
-				$this->knockBack($deltaX, $deltaZ, $source->getKnockBack(), $source->getVerticalKnockBackLimit());
+
+			if($this->isAlive()){
+				$this->doHitAnimation();
 			}
 		}
 
 		if($this->isAlive()){
 			$this->applyPostDamageEffects($source);
-			$this->doHitAnimation();
 		}
 	}
 

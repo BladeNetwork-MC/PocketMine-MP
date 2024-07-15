@@ -50,7 +50,7 @@ use function substr;
  * Handler used for the resource packs sequence phase of the session. This handler takes care of downloading resource
  * packs to the client.
  */
-class ResourcePacksPacketHandler extends PacketHandler{
+class ResourcePacksPacketHandler extends ChunkRequestPacketHandler{
 	private const PACK_CHUNK_SIZE = 256 * 1024; //256KB
 
 	/**
@@ -82,12 +82,14 @@ class ResourcePacksPacketHandler extends PacketHandler{
 	 * @phpstan-param \Closure() : void     $completionCallback
 	 */
 	public function __construct(
-		private NetworkSession $session,
+		protected NetworkSession $session,
 		private array $resourcePackStack,
 		private array $encryptionKeys,
 		private bool $mustAccept,
 		private \Closure $completionCallback
 	){
+		parent::__construct($session);
+
 		$this->requestQueue = new \SplQueue();
 		foreach($resourcePackStack as $pack){
 			$this->resourcePacksById[$pack->getPackId()] = $pack;
@@ -177,7 +179,7 @@ class ResourcePacksPacketHandler extends PacketHandler{
 				//we don't force here, because it doesn't have user-facing effects
 				//but it does have an annoying side-effect when true: it makes
 				//the client remove its own non-server-supplied resource packs.
-				$this->session->sendDataPacket(ResourcePackStackPacket::create($stack, [], false, ProtocolInfo::MINECRAFT_VERSION_NETWORK, new Experiments([], false)));
+				$this->session->sendDataPacket(ResourcePackStackPacket::create($stack, [], false, ProtocolInfo::MINECRAFT_VERSION_NETWORK, new Experiments([], false), false));
 				$this->session->getLogger()->debug("Applying resource pack stack");
 				break;
 			case ResourcePackClientResponsePacket::STATUS_COMPLETED:

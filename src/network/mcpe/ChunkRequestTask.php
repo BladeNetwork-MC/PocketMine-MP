@@ -23,20 +23,18 @@ declare(strict_types=1);
 
 namespace pocketmine\network\mcpe;
 
-use pocketmine\network\mcpe\compression\CompressBatchPromise;
 use pocketmine\network\mcpe\compression\Compressor;
 use pocketmine\network\mcpe\convert\TypeConverter;
-use pocketmine\network\mcpe\protocol\LevelChunkPacket;
-use pocketmine\network\mcpe\protocol\serializer\PacketBatch;
-use pocketmine\network\mcpe\protocol\types\ChunkPosition;
+use pocketmine\network\mcpe\protocol\serializer\PacketSerializer;
 use pocketmine\network\mcpe\protocol\types\DimensionIds;
 use pocketmine\network\mcpe\serializer\ChunkSerializer;
 use pocketmine\scheduler\AsyncTask;
 use pocketmine\thread\NonThreadSafeValue;
-use pocketmine\utils\BinaryStream;
+use pocketmine\utils\Binary;
 use pocketmine\world\format\Chunk;
 use pocketmine\world\format\io\FastChunkSerializer;
-use function chr;
+/** @phpstan-ignore-next-line */
+use function xxhash64;
 
 class ChunkRequestTask extends AsyncTask{
 	private const TLS_KEY_PROMISE = "promise";
@@ -48,41 +46,63 @@ class ChunkRequestTask extends AsyncTask{
 	private int $dimensionId;
 	/** @phpstan-var NonThreadSafeValue<Compressor> */
 	protected NonThreadSafeValue $compressor;
+	protected int $mappingProtocol;
 	private string $tiles;
 
 	/**
 	 * @phpstan-param DimensionIds::* $dimensionId
 	 */
-	public function __construct(int $chunkX, int $chunkZ, int $dimensionId, Chunk $chunk, CompressBatchPromise $promise, Compressor $compressor){
+	public function __construct(int $chunkX, int $chunkZ, int $dimensionId, Chunk $chunk, TypeConverter $typeConverter, CachedChunkPromise $promise, Compressor $compressor){
 		$this->compressor = new NonThreadSafeValue($compressor);
+		$this->mappingProtocol = $typeConverter->getProtocolId();
 
 		$this->chunk = FastChunkSerializer::serializeTerrain($chunk);
 		$this->chunkX = $chunkX;
 		$this->chunkZ = $chunkZ;
 		$this->dimensionId = $dimensionId;
-		$this->tiles = ChunkSerializer::serializeTiles($chunk);
+		$this->tiles = ChunkSerializer::serializeTiles($chunk, $typeConverter);
 
 		$this->storeLocal(self::TLS_KEY_PROMISE, $promise);
 	}
 
 	public function onRun() : void{
 		$chunk = FastChunkSerializer::deserializeTerrain($this->chunk);
-		$dimensionId = $this->dimensionId;
 
-		$subCount = ChunkSerializer::getSubChunkCount($chunk, $dimensionId);
-		$converter = TypeConverter::getInstance();
-		$payload = ChunkSerializer::serializeFullChunk($chunk, $dimensionId, $converter->getBlockTranslator(), $this->tiles);
+		$cache = new CachedChunk();
 
-		$stream = new BinaryStream();
-		PacketBatch::encodePackets($stream, [LevelChunkPacket::create(new ChunkPosition($this->chunkX, $this->chunkZ), $dimensionId, $subCount, false, null, $payload)]);
+		$converter = TypeConverter::getInstance($this->mappingProtocol);
+		foreach(ChunkSerializer::serializeSubChunks($chunk, $this->dimensionId, $converter->getBlockTranslator(), $this->mappingProtocol) as $subChunk){
+			/** @phpstan-ignore-next-line */
+			$cache->addSubChunk(Binary::readLong(xxhash64($subChunk)), $subChunk);
+		}
 
-		$compressor = $this->compressor->deserialize();
-		$this->setResult(chr($compressor->getNetworkId()) . $compressor->compress($stream->getBuffer()));
+		$encoder = PacketSerializer::encoder($this->mappingProtocol);
+		$biomeEncoder = clone $encoder;
+		ChunkSerializer::serializeBiomes($chunk, $this->dimensionId, $biomeEncoder);
+		/** @phpstan-ignore-next-line */
+		$cache->setBiomes(Binary::readLong(xxhash64($chunkBuffer = $biomeEncoder->getBuffer())), $chunkBuffer);
+
+		$chunkDataEncoder = clone $encoder;
+		ChunkSerializer::serializeChunkData($chunk, $chunkDataEncoder, $converter, $this->tiles);
+
+		$cache->compressPackets(
+			$this->chunkX,
+			$this->chunkZ,
+			$this->dimensionId,
+			$chunkDataEncoder->getBuffer(),
+			$this->compressor->deserialize(),
+			$this->mappingProtocol
+		);
+
+		$this->setResult($cache);
 	}
 
 	public function onCompletion() : void{
-		/** @var CompressBatchPromise $promise */
+		/** @var CachedChunk $result */
+		$result = $this->getResult();
+
+		/** @var CachedChunkPromise $promise */
 		$promise = $this->fetchLocal(self::TLS_KEY_PROMISE);
-		$promise->resolve($this->getResult());
+		$promise->resolve($result);
 	}
 }
