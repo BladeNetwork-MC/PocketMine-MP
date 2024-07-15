@@ -30,6 +30,6 @@ use pocketmine\network\mcpe\protocol\types\ParticleIds;
 class WindExplosionParticle extends ProtocolParticle{
 
 	public function encode(Vector3 $pos) : array{
-		return [LevelEventPacket::standardParticle(ParticleIds::WIND_EXPLOSION, 0, $this->protocolId, $pos)];
+		return [LevelEventPacket::standardParticle(ParticleIds::WIND_EXPLOSION, 0, $pos, $this->protocolId)];
 	}
 }
