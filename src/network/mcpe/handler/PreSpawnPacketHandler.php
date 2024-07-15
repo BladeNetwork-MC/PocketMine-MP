@@ -51,8 +51,6 @@ use pocketmine\player\Player;
 use pocketmine\Server;
 use pocketmine\timings\Timings;
 use Ramsey\Uuid\Uuid;
-use function array_map;
-use function sprintf;
 
 /**
  * Handler used for the pre-spawn phase of the session.
