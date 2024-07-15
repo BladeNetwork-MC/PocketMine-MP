@@ -56,6 +56,7 @@ use pocketmine\network\mcpe\protocol\BossEventPacket;
 use pocketmine\network\mcpe\protocol\CommandBlockUpdatePacket;
 use pocketmine\network\mcpe\protocol\CommandRequestPacket;
 use pocketmine\network\mcpe\protocol\ContainerClosePacket;
+use pocketmine\network\mcpe\protocol\CraftingEventPacket;
 use pocketmine\network\mcpe\protocol\EmotePacket;
 use pocketmine\network\mcpe\protocol\InteractPacket;
 use pocketmine\network\mcpe\protocol\InventoryTransactionPacket;
@@ -126,7 +127,7 @@ use const JSON_THROW_ON_ERROR;
 /**
  * This handler handles packets related to general gameplay.
  */
-class InGamePacketHandler extends PacketHandler{
+class InGamePacketHandler extends ChunkRequestPacketHandler{
 	private const MAX_FORM_RESPONSE_DEPTH = 2; //modal/simple will be 1, custom forms 2 - they will never contain anything other than string|int|float|bool|null
 
 	protected float $lastRightClickTime = 0.0;
@@ -143,9 +144,11 @@ class InGamePacketHandler extends PacketHandler{
 
 	public function __construct(
 		private Player $player,
-		private NetworkSession $session,
+		NetworkSession $session,
 		private InventoryManager $inventoryManager
-	){}
+	){
+		parent::__construct($session);
+	}
 
 	public function handleText(TextPacket $packet) : bool{
 		if($packet->type === TextPacket::TYPE_CHAT){
@@ -220,12 +223,14 @@ class InGamePacketHandler extends PacketHandler{
 			$swimming = $this->resolveOnOffInputFlags($inputFlags, PlayerAuthInputFlags::START_SWIMMING, PlayerAuthInputFlags::STOP_SWIMMING);
 			$gliding = $this->resolveOnOffInputFlags($inputFlags, PlayerAuthInputFlags::START_GLIDING, PlayerAuthInputFlags::STOP_GLIDING);
 			$flying = $this->resolveOnOffInputFlags($inputFlags, PlayerAuthInputFlags::START_FLYING, PlayerAuthInputFlags::STOP_FLYING);
+			$crawling = $this->resolveOnOffInputFlags($inputFlags, PlayerAuthInputFlags::START_CRAWLING, PlayerAuthInputFlags::STOP_CRAWLING);
 			$mismatch =
 				($sneaking !== null && !$this->player->toggleSneak($sneaking)) |
 				($sprinting !== null && !$this->player->toggleSprint($sprinting)) |
 				($swimming !== null && !$this->player->toggleSwim($swimming)) |
 				($gliding !== null && !$this->player->toggleGlide($gliding)) |
-				($flying !== null && !$this->player->toggleFlight($flying));
+				($flying !== null && !$this->player->toggleFlight($flying)) |
+				($crawling !== null && !$this->player->toggleCrawl($crawling));
 			if((bool) $mismatch){
 				$this->player->sendData([$this->player]);
 			}
@@ -542,7 +547,7 @@ class InGamePacketHandler extends PacketHandler{
 			}else{
 				$blocks[] = $blockPos;
 			}
-			foreach($this->player->getWorld()->createBlockUpdatePackets($blocks) as $packet){
+			foreach($this->player->getWorld()->createBlockUpdatePackets($this->session->getTypeConverter(), $blocks) as $packet){
 				$this->session->sendDataPacket($packet);
 			}
 		}
@@ -737,6 +742,10 @@ class InGamePacketHandler extends PacketHandler{
 		return true; //this packet is useless
 	}
 
+	public function handleCraftingEvent(CraftingEventPacket $packet) : bool{
+		return true; //this is a broken useless packet, so we don't use it
+	}
+
 	public function handleBlockActorData(BlockActorDataPacket $packet) : bool{
 		$pos = new Vector3($packet->blockPosition->getX(), $packet->blockPosition->getY(), $packet->blockPosition->getZ());
 		if($pos->distanceSquared($this->player->getLocation()) > 10000){
@@ -765,7 +774,7 @@ class InGamePacketHandler extends PacketHandler{
 
 			try{
 				if(!$block->updateText($this->player, $text)){
-					foreach($this->player->getWorld()->createBlockUpdatePackets([$pos]) as $updatePacket){
+					foreach($this->player->getWorld()->createBlockUpdatePackets($this->session->getTypeConverter(), [$pos]) as $updatePacket){
 						$this->session->sendDataPacket($updatePacket);
 					}
 				}

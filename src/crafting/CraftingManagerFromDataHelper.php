@@ -238,6 +238,7 @@ final class CraftingManagerFromDataHelper{
 				}
 				$outputs[] = $output;
 			}
+			//TODO: check unlocking requirements - our current system doesn't support this
 			$result->registerShapelessRecipe(new ShapelessRecipe(
 				$inputs,
 				$outputs,
@@ -264,6 +265,7 @@ final class CraftingManagerFromDataHelper{
 				}
 				$outputs[] = $output;
 			}
+			//TODO: check unlocking requirements - our current system doesn't support this
 			$result->registerShapedRecipe(new ShapedRecipe(
 				$recipe->shape,
 				$inputs,

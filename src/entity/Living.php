@@ -281,6 +281,15 @@ abstract class Living extends Entity{
 		}
 	}
 
+	public function getDefaultSpeed() : float{
+		return $this->moveSpeedAttr->getDefaultValue();
+	}
+
+	public function setDefaultSpeed(float $speed, bool $fit = false) : void{
+		$this->moveSpeedAttr->setDefaultValue($speed);
+		$this->setMovementSpeed($this->isSprinting() ? ($speed * 1.3) : $speed, $fit);
+	}
+
 	public function getMovementSpeed() : float{
 		return $this->moveSpeedAttr->getValue();
 	}
@@ -555,26 +564,33 @@ abstract class Living extends Entity{
 			return;
 		}
 
-		$this->attackTime = $source->getAttackCooldown();
+		if($this->attackTime <= 0){
+			//this logic only applies if the entity was cold attacked
 
-		if($source instanceof EntityDamageByChildEntityEvent){
-			$e = $source->getChild();
-			if($e !== null){
-				$motion = $e->getMotion();
-				$this->knockBack($motion->x, $motion->z, $source->getKnockBack(), $source->getVerticalKnockBackLimit());
+			$this->attackTime = $source->getAttackCooldown();
+
+			if($source instanceof EntityDamageByChildEntityEvent){
+				$e = $source->getChild();
+				if($e !== null){
+					$motion = $e->getMotion();
+					$this->knockBack($motion->x, $motion->z, $source->getKnockBack(), $source->getVerticalKnockBackLimit());
+				}
+			}elseif($source instanceof EntityDamageByEntityEvent){
+				$e = $source->getDamager();
+				if($e !== null){
+					$deltaX = $this->location->x - $e->location->x;
+					$deltaZ = $this->location->z - $e->location->z;
+					$this->knockBack($deltaX, $deltaZ, $source->getKnockBack(), $source->getVerticalKnockBackLimit());
+				}
 			}
-		}elseif($source instanceof EntityDamageByEntityEvent){
-			$e = $source->getDamager();
-			if($e !== null){
-				$deltaX = $this->location->x - $e->location->x;
-				$deltaZ = $this->location->z - $e->location->z;
-				$this->knockBack($deltaX, $deltaZ, $source->getKnockBack(), $source->getVerticalKnockBackLimit());
+
+			if($this->isAlive()){
+				$this->doHitAnimation();
 			}
 		}
 
 		if($this->isAlive()){
 			$this->applyPostDamageEffects($source);
-			$this->doHitAnimation();
 		}
 	}
 

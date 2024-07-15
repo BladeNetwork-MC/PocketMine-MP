@@ -49,6 +49,7 @@ use pocketmine\network\mcpe\protocol\BiomeDefinitionListPacket;
 use pocketmine\network\mcpe\protocol\CraftingDataPacket;
 use pocketmine\network\mcpe\protocol\CreativeContentPacket;
 use pocketmine\network\mcpe\protocol\PacketPool;
+use pocketmine\network\mcpe\protocol\ProtocolInfo;
 use pocketmine\network\mcpe\protocol\serializer\ItemTypeDictionary;
 use pocketmine\network\mcpe\protocol\serializer\PacketSerializer;
 use pocketmine\network\mcpe\protocol\StartGamePacket;
@@ -173,7 +174,7 @@ class ParserPacketHandler extends PacketHandler{
 
 		$rawExtraData = $itemStack->getRawExtraData();
 		if($rawExtraData !== ""){
-			$decoder = PacketSerializer::decoder($rawExtraData, 0);
+			$decoder = PacketSerializer::decoder(ProtocolInfo::CURRENT_PROTOCOL, $rawExtraData, 0);
 			$extraData = $itemStringId === ItemTypeNames::SHIELD ? ItemStackExtraDataShield::read($decoder) : ItemStackExtraData::read($decoder);
 			$nbt = $extraData->getNbt();
 			if($nbt !== null && count($nbt) > 0){
@@ -195,7 +196,7 @@ class ParserPacketHandler extends PacketHandler{
 	 * @return mixed[]
 	 */
 	private static function objectToOrderedArray(object $object) : array{
-		$result = (array) $object;
+		$result = (array) ($object instanceof \JsonSerializable ? $object->jsonSerialize() : $object);
 		ksort($result, SORT_STRING);
 
 		foreach($result as $property => $value){
@@ -335,21 +336,25 @@ class ParserPacketHandler extends PacketHandler{
 				}
 			}
 		}
+		$unlockingIngredients = $entry->getUnlockingRequirement()->getUnlockingIngredients();
 		return new ShapedRecipeData(
 			array_map(fn(array $array) => implode('', $array), $shape),
 			$outputsByKey,
 			array_map(fn(ItemStack $output) => $this->itemStackToJson($output), $entry->getOutput()),
 			$entry->getBlockName(),
-			$entry->getPriority()
+			$entry->getPriority(),
+			$unlockingIngredients !== null ? array_map(fn(RecipeIngredient $input) => $this->recipeIngredientToJson($input), $unlockingIngredients) : []
 		);
 	}
 
 	private function shapelessRecipeToJson(ShapelessRecipe $recipe) : ShapelessRecipeData{
+		$unlockingIngredients = $recipe->getUnlockingRequirement()->getUnlockingIngredients();
 		return new ShapelessRecipeData(
 			array_map(fn(RecipeIngredient $input) => $this->recipeIngredientToJson($input), $recipe->getInputs()),
 			array_map(fn(ItemStack $output) => $this->itemStackToJson($output), $recipe->getOutputs()),
 			$recipe->getBlockName(),
-			$recipe->getPriority()
+			$recipe->getPriority(),
+			$unlockingIngredients !== null ? array_map(fn(RecipeIngredient $input) => $this->recipeIngredientToJson($input), $unlockingIngredients) : []
 		);
 	}
 
@@ -407,7 +412,13 @@ class ParserPacketHandler extends PacketHandler{
 			$mappedType = $typeMap[$entry->getTypeId()];
 
 			if($entry instanceof ShapedRecipe){
-				$recipes[$mappedType][] = $this->shapedRecipeToJson($entry);
+				//all known recipes are currently symmetric and I don't feel like attaching a `symmetric` field to
+				//every shaped recipe for this - split it into a separate category instead
+				if(!$entry->isSymmetric()){
+					$recipes[$mappedType . "_asymmetric"][] = $this->shapedRecipeToJson($entry);
+				}else{
+					$recipes[$mappedType][] = $this->shapedRecipeToJson($entry);
+				}
 			}elseif($entry instanceof ShapelessRecipe){
 				$recipes[$mappedType][] = $this->shapelessRecipeToJson($entry);
 			}elseif($entry instanceof MultiRecipe){
@@ -577,7 +588,7 @@ function main(array $argv) : int{
 			fwrite(STDERR, "Unknown packet on line " . ($lineNum + 1) . ": " . $parts[1]);
 			continue;
 		}
-		$serializer = PacketSerializer::decoder($raw, 0);
+		$serializer = PacketSerializer::decoder(ProtocolInfo::CURRENT_PROTOCOL, $raw, 0);
 
 		$pk->decode($serializer);
 		$pk->handle($handler);

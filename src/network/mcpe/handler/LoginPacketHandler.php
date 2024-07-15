@@ -32,6 +32,7 @@ use pocketmine\network\mcpe\JwtException;
 use pocketmine\network\mcpe\JwtUtils;
 use pocketmine\network\mcpe\NetworkSession;
 use pocketmine\network\mcpe\protocol\LoginPacket;
+use pocketmine\network\mcpe\protocol\ProtocolInfo;
 use pocketmine\network\mcpe\protocol\types\login\AuthenticationData;
 use pocketmine\network\mcpe\protocol\types\login\ClientData;
 use pocketmine\network\mcpe\protocol\types\login\ClientDataToSkinDataHelper;
@@ -42,24 +43,35 @@ use pocketmine\player\PlayerInfo;
 use pocketmine\player\XboxLivePlayerInfo;
 use pocketmine\Server;
 use Ramsey\Uuid\Uuid;
+use function in_array;
 use function is_array;
 
 /**
  * Handles the initial login phase of the session. This handler is used as the initial state.
  */
-class LoginPacketHandler extends PacketHandler{
+class LoginPacketHandler extends ChunkRequestPacketHandler{
 	/**
 	 * @phpstan-param \Closure(PlayerInfo) : void $playerInfoConsumer
 	 * @phpstan-param \Closure(bool $isAuthenticated, bool $authRequired, Translatable|string|null $error, ?string $clientPubKey) : void $authCallback
 	 */
 	public function __construct(
 		private Server $server,
-		private NetworkSession $session,
+		NetworkSession $session,
 		private \Closure $playerInfoConsumer,
 		private \Closure $authCallback
-	){}
+	){
+		parent::__construct($session);
+	}
 
 	public function handleLogin(LoginPacket $packet) : bool{
+		$protocolVersion = $packet->protocol;
+		if(!$this->isCompatibleProtocol($protocolVersion)){
+			$this->session->disconnectIncompatibleProtocol($protocolVersion);
+
+			return true;
+		}
+		$this->session->setProtocolId($protocolVersion);
+
 		$extraData = $this->fetchAuthData($packet->chainDataJwt);
 
 		if(!Player::isValidUserName($extraData->displayName)){
@@ -110,8 +122,7 @@ class LoginPacketHandler extends PacketHandler{
 
 		$ev = new PlayerPreLoginEvent(
 			$playerInfo,
-			$this->session->getIp(),
-			$this->session->getPort(),
+			$this->session,
 			$this->server->requiresAuthentication()
 		);
 		if($this->server->getNetwork()->getValidConnectionCount() > $this->server->getMaxPlayers()){
@@ -216,5 +227,9 @@ class LoginPacketHandler extends PacketHandler{
 	protected function processLogin(LoginPacket $packet, bool $authRequired) : void{
 		$this->server->getAsyncPool()->submitTask(new ProcessLoginTask($packet->chainDataJwt->chain, $packet->clientDataJwt, $authRequired, $this->authCallback));
 		$this->session->setHandler(null); //drop packets received during login verification
+	}
+
+	protected function isCompatibleProtocol(int $protocolVersion) : bool{
+		return in_array($protocolVersion, ProtocolInfo::ACCEPTED_PROTOCOL, true);
 	}
 }
