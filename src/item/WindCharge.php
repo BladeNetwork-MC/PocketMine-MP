@@ -23,9 +23,26 @@ declare(strict_types=1);
 
 namespace pocketmine\item;
 
-class Bowl extends Item{
+use pocketmine\entity\Location;
+use pocketmine\entity\projectile\Throwable;
+use pocketmine\entity\projectile\WindCharge as WindChargeEntity;
+use pocketmine\player\Player;
 
-	public function getFuelTime() : int{
-		return 200;
+class WindCharge extends ProjectileItem{
+
+	public function getMaxStackSize() : int{
+		return 64;
+	}
+
+	protected function createEntity(Location $location, Player $thrower) : Throwable{
+		return new WindChargeEntity($location, $thrower);
+	}
+
+	public function getThrowForce() : float{
+		return 1.5;
+	}
+
+	public function getCooldownTicks() : int{
+		return 10;
 	}
 }

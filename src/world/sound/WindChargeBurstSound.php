@@ -21,11 +21,14 @@
 
 declare(strict_types=1);
 
-namespace pocketmine\item;
+namespace pocketmine\world\sound;
 
-class Bowl extends Item{
+use pocketmine\math\Vector3;
+use pocketmine\network\mcpe\protocol\LevelSoundEventPacket;
+use pocketmine\network\mcpe\protocol\types\LevelSoundEvent;
 
-	public function getFuelTime() : int{
-		return 200;
+final class WindChargeBurstSound implements Sound{
+	public function encode(Vector3 $pos) : array{
+		return [LevelSoundEventPacket::nonActorSound(LevelSoundEvent::WIND_CHARGE_BURST, $pos, false)];
 	}
 }

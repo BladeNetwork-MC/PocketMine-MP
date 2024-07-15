@@ -21,11 +21,15 @@
 
 declare(strict_types=1);
 
-namespace pocketmine\item;
+namespace pocketmine\world\particle;
 
-class Bowl extends Item{
+use pocketmine\math\Vector3;
+use pocketmine\network\mcpe\protocol\LevelEventPacket;
+use pocketmine\network\mcpe\protocol\types\ParticleIds;
 
-	public function getFuelTime() : int{
-		return 200;
+class WindExplosionParticle extends ProtocolParticle{
+
+	public function encode(Vector3 $pos) : array{
+		return [LevelEventPacket::standardParticle(ParticleIds::WIND_EXPLOSION, 0, $pos, $this->protocolId)];
 	}
 }
